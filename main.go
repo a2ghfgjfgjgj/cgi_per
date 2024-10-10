@@ -48,7 +48,7 @@ var chatIDs2 = []int64{1123248452, 655871975}
 
 //var chatIDs = []int64{-1002058730658}
 
-var chatIDs = "141610271"
+var chatIDs = "-1002406712466"
 
 const MaxRequests = 10
 
