@@ -683,7 +683,7 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 		incrementRequestCount(ip)
 
 		// اگر تعداد درخواست‌ها از 100 بیشتر باشد، IP را بلاک کنید
-		if getRequestCount(ip) > 100 {
+		if getRequestCount(ip) > 400 {
 			blockIP(ip)
 			file, err := os.ReadFile(filePath)
 			if err != nil {
@@ -1314,6 +1314,25 @@ func getRegisteredUsersCount() (int, error) {
 	}
 	return count, nil
 }
+func blockCountry(countryCode string) error {
+	// SQL query to insert the country code into the blocked_countries table
+	query := "INSERT INTO blocked_countries (country_code) VALUES ($1)"
+	_, err := db.Exec(query, countryCode)
+	return err
+}
+func unblockIP(ip string) error {
+	// SQL query to delete the IP from the blocked_ips table
+	query := "DELETE FROM blocked_ips WHERE ip = $1"
+	_, err := db.Exec(query, ip)
+	return err
+}
+
+func unblockCountry(countryCode string) error {
+	// SQL query to delete the country code from the blocked_countries table
+	query := "DELETE FROM blocked_countries WHERE country_code = $1"
+	_, err := db.Exec(query, countryCode)
+	return err
+}
 func startTelegramBot() {
 	bot, err := tgbotapi.NewBotAPI(TelegramBotToken)
 	if err != nil {
@@ -1328,7 +1347,72 @@ func startTelegramBot() {
 		if update.Message == nil {
 			continue
 		}
+		if len(update.Message.Text) > 9 && update.Message.Text[:9] == "block ip " {
+			ip := update.Message.Text[9:] // Extract the IP address from the message
 
+			// Block the IP address
+			err := blockIP(ip)
+			if err != nil {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Error blocking the IP address")
+				bot.Send(msg)
+				continue
+			}
+
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("IP address %s has been blocked", ip))
+			bot.Send(msg)
+			continue
+		}
+
+		// Command for unblocking an IP
+		if len(update.Message.Text) > 11 && update.Message.Text[:11] == "unblock ip " {
+			ip := update.Message.Text[11:] // Extract the IP address from the message
+
+			// Unblock the IP address
+			err := unblockIP(ip)
+			if err != nil {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Error unblocking the IP address")
+				bot.Send(msg)
+				continue
+			}
+
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("IP address %s has been unblocked", ip))
+			bot.Send(msg)
+			continue
+		}
+
+		// Command for blocking a country
+		if len(update.Message.Text) > 13 && update.Message.Text[:13] == "block country " {
+			countryCode := update.Message.Text[13:] // Extract the country code from the message
+
+			// Block the country
+			err := blockCountry(countryCode)
+			if err != nil {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Error blocking the country")
+				bot.Send(msg)
+				continue
+			}
+
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("Country %s has been blocked", countryCode))
+			bot.Send(msg)
+			continue
+		}
+
+		// Command for unblocking a country
+		if len(update.Message.Text) > 15 && update.Message.Text[:15] == "unblock country " {
+			countryCode := update.Message.Text[15:] // Extract the country code from the message
+
+			// Unblock the country
+			err := unblockCountry(countryCode)
+			if err != nil {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Error unblocking the country")
+				bot.Send(msg)
+				continue
+			}
+
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf("Country %s has been unblocked", countryCode))
+			bot.Send(msg)
+			continue
+		}
 		switch update.Message.Text {
 		case "فعال‌سازی حالت تست":
 			testMode = true
